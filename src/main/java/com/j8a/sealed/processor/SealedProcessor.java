@@ -11,6 +11,7 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.MirroredTypesException;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
@@ -126,13 +127,11 @@ public class SealedProcessor extends AbstractProcessor {
         }
 
         if (!genericPermitted.isEmpty()) {
-            // Has 1 generic permitted class (or more, but error reported above)
             if (!baseIsGeneric) {
                 error(blueprint, "The base interface MUST be generic because permitted class '" + genericPermitted.get(0).getSimpleName() + "' is generic. Either make the permitted class non-generic or add type parameters to the base interface.");
                 valid = false;
             }
         } else {
-            // 0 generic permitted classes
             if (baseIsGeneric) {
                 error(blueprint, "The base interface MUST NOT be generic because no permitted classes are generic. Either remove type parameters from the base interface or make one permitted class generic.");
                 valid = false;
@@ -182,7 +181,6 @@ public class SealedProcessor extends AbstractProcessor {
         String packageName = elementUtils.getPackageOf(blueprint).getQualifiedName().toString();
         ClassName rootClassName = ClassName.get(packageName, rootName);
 
-        // Capture Type Variables from Blueprint
         List<TypeVariableName> typeVariables = new ArrayList<>();
         for (TypeParameterElement tpe : blueprint.getTypeParameters()) {
             typeVariables.add(TypeVariableName.get(tpe));
@@ -195,7 +193,6 @@ public class SealedProcessor extends AbstractProcessor {
                 .addModifiers(Modifier.PUBLIC)
                 .addTypeVariables(typeVariables);
 
-        // Add superinterface with generics if applicable
         if (typeVariables.isEmpty()) {
             rootBuilder.addSuperinterface(ClassName.get(blueprint));
         } else {
@@ -236,8 +233,13 @@ public class SealedProcessor extends AbstractProcessor {
         for (TypeElement permitted : permittedClasses) {
             rootBuilder.addMethod(generateWrapMethod(permitted, rootClassName, typeVariables));
         }
+        
+        // 5. Generate map() method if applicable
+        if (!typeVariables.isEmpty()) {
+             generateMapMethod(rootBuilder, rootClassName, permittedClasses, typeVariables);
+        }
 
-        // 5. Generate DSL Entry Points and Interfaces
+        // 6. Generate DSL Entry Points and Interfaces
         if (mode == GenerationMode.FUNCTION || mode == GenerationMode.BOTH) {
             generateFunctionDSL(rootBuilder, rootClassName, permittedClasses, typeVariables);
         }
@@ -249,6 +251,107 @@ public class SealedProcessor extends AbstractProcessor {
                 .skipJavaLangImports(true)
                 .build()
                 .writeTo(filer);
+    }
+
+    private void generateMapMethod(TypeSpec.Builder rootBuilder, ClassName rootClassName, List<TypeElement> permittedClasses, List<TypeVariableName> rootTypeVars) {
+        // Only verify if we have exactly one generic permitted class (enforced by validation)
+        TypeElement genericPermitted = permittedClasses.stream()
+                .filter(pe -> !pe.getTypeParameters().isEmpty())
+                .findFirst()
+                .orElse(null);
+        
+        if (genericPermitted == null || rootTypeVars.size() != 1) {
+             // Should not happen based on current logic but safe guard
+             return;
+        }
+
+        // Find accessor and constructor
+        String accessorName = null;
+        for (ExecutableElement method : ElementFilter.methodsIn(genericPermitted.getEnclosedElements())) {
+            if (method.getModifiers().contains(Modifier.PUBLIC) && !method.getModifiers().contains(Modifier.STATIC)) {
+                 TypeMirror returnType = method.getReturnType();
+                 // Simple check: does return type name match the type parameter name?
+                 // A better check involves checking if returnType is a TypeVariable and its element matches the class's type param
+                 if (returnType.getKind() == javax.lang.model.type.TypeKind.TYPEVAR) {
+                     if (returnType.toString().equals(genericPermitted.getTypeParameters().get(0).getSimpleName().toString())) {
+                         accessorName = method.getSimpleName().toString();
+                         break;
+                     }
+                 }
+            }
+        }
+        
+        boolean hasConstructor = false;
+        for (ExecutableElement constructor : ElementFilter.constructorsIn(genericPermitted.getEnclosedElements())) {
+             if (constructor.getModifiers().contains(Modifier.PUBLIC) && constructor.getParameters().size() == 1) {
+                 TypeMirror paramType = constructor.getParameters().get(0).asType();
+                 if (paramType.getKind() == javax.lang.model.type.TypeKind.TYPEVAR) {
+                      if (paramType.toString().equals(genericPermitted.getTypeParameters().get(0).getSimpleName().toString())) {
+                          hasConstructor = true;
+                          break;
+                      }
+                 }
+             }
+        }
+
+        if (accessorName == null || !hasConstructor) {
+             warning(genericPermitted, "Could not generate 'map' method. Requires a public accessor returning the type parameter and a public constructor accepting it.");
+             return;
+        }
+
+        // Generate map
+        TypeVariableName tType = rootTypeVars.get(0);
+        TypeVariableName uType = TypeVariableName.get("U");
+        
+        ParameterizedTypeName returnType = ParameterizedTypeName.get(rootClassName, uType);
+        ParameterizedTypeName mapperType = ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
+                WildcardTypeName.supertypeOf(tType), 
+                WildcardTypeName.subtypeOf(uType));
+
+        MethodSpec.Builder mapBuilder = MethodSpec.methodBuilder("map")
+                .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
+                .addTypeVariable(uType)
+                .returns(returnType)
+                .addParameter(mapperType, "mapper");
+
+        // Visitor<T, Result<U>>
+        // However, Visitor is generated as Visitor<T, R>
+        // So we need Visitor<T, Result<U>>
+        ClassName visitorClassName = rootClassName.nestedClass("Visitor");
+        ParameterizedTypeName visitorType = ParameterizedTypeName.get(visitorClassName, tType, returnType);
+
+        TypeSpec.Builder visitorImpl = TypeSpec.anonymousClassBuilder("")
+                .addSuperinterface(visitorType);
+        
+        for (TypeElement permitted : permittedClasses) {
+            MethodSpec.Builder onMethod = MethodSpec.methodBuilder("on" + permitted.getSimpleName())
+                    .addModifiers(Modifier.PUBLIC)
+                    .addAnnotation(Override.class)
+                    .returns(returnType);
+            
+            TypeName permittedTypeInput;
+            if (!permitted.getTypeParameters().isEmpty()) {
+                 permittedTypeInput = ParameterizedTypeName.get(ClassName.get(permitted), tType);
+            } else {
+                 permittedTypeInput = TypeName.get(permitted.asType());
+            }
+            
+            onMethod.addParameter(permittedTypeInput, "val");
+
+            if (permitted.equals(genericPermitted)) {
+                // return wrap(new Success<>(mapper.apply(val.get())));
+                onMethod.addStatement("return $T.wrap(new $T<>(mapper.apply(val.$L())))", 
+                        rootClassName, ClassName.get(permitted), accessorName);
+            } else {
+                // return wrap(val);
+                onMethod.addStatement("return $T.<$T>wrap(val)", rootClassName, uType);
+            }
+            
+            visitorImpl.addMethod(onMethod.build());
+        }
+
+        mapBuilder.addStatement("return this.accept($L)", visitorImpl.build());
+        rootBuilder.addMethod(mapBuilder.build());
     }
 
     private TypeSpec generateVisitorInterface(ClassName visitorClassName, List<TypeElement> permittedClasses, List<TypeVariableName> rootTypeVars) {
