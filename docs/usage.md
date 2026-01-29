@@ -106,3 +106,57 @@ The generated wrappers delegate methods defined in the Blueprint (`ShapeDef`) to
 // Since 'area()' was defined in ShapeDef and implemented in Circle/Rectangle
 double a = shape.area(); 
 ```
+
+## 6. Generic Support (e.g., Result<T>)
+
+The library supports sealed hierarchies with generics, useful for types like `Result<T>` or `Option<T>`.
+
+**Rules:**
+*   Only **one** permitted class can be generic (e.g., `Success<T>`).
+*   The base interface must be generic (e.g., `ResultDef<T>`).
+
+### Example: Result<T>
+
+```java
+@Sealed(name = "Result")
+@Permits(classes = {Success.class, Failure.class})
+public interface ResultDef<T> {
+    // Optional common methods
+}
+
+// Generic permitted class
+public final class Success<T> {
+    private final T value;
+    public Success(T value) { this.value = value; }
+    public T get() { return value; }
+}
+
+// Non-generic permitted class
+public final class Failure {
+    private final String message;
+    public Failure(String message) { this.message = message; }
+    public String message() { return message; }
+}
+```
+
+### Using Generics
+
+The generated `Result<T>` interface will handle type propagation.
+
+```java
+Result<String> success = Result.wrap(new Success<>("Hello"));
+Result<String> failure = Result.wrap(new Failure("Error"));
+
+// Monadic Map (Auto-generated)
+// Transform Result<String> -> Result<Integer>
+Result<Integer> length = success.map(String::length); 
+
+// Pattern Matching
+Result.returning(String.class)
+    .onFailure(f -> "Failed: " + f.message())
+    .onSuccess(s -> "Succeeded: " + s.get())
+    .asFunction()
+    .apply(success);
+```
+
+**Note on `map`:** The `map` method is auto-generated only if the generic permitted class has a compatible constructor (1 arg) and accessor method.
