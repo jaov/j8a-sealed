@@ -225,6 +225,7 @@ public class SealedProcessor extends AbstractProcessor {
         rootBuilder.addMethod(acceptMethod);
 
         // 3. Generate Wrapper classes
+        rootBuilder.addType(generateAbstractWrapper(rootClassName, typeVariables));
         for (TypeElement permitted : permittedClasses) {
             rootBuilder.addType(generateWrapperClass(permitted, rootClassName, visitorClassName, blueprint, typeVariables));
         }
@@ -380,6 +381,67 @@ public class SealedProcessor extends AbstractProcessor {
         return visitorBuilder.build();
     }
 
+    private TypeSpec generateAbstractWrapper(ClassName rootClassName, List<TypeVariableName> rootTypeVars) {
+        TypeVariableName vType = TypeVariableName.get("V");
+        // Avoid collision with root type vars
+        while (rootTypeVars.contains(vType)) {
+            vType = TypeVariableName.get(vType.name + "_");
+        }
+
+        TypeSpec.Builder wrapperBuilder = TypeSpec.classBuilder("Wrapper")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.ABSTRACT);
+
+        wrapperBuilder.addTypeVariables(rootTypeVars);
+        wrapperBuilder.addTypeVariable(vType);
+
+        if (rootTypeVars.isEmpty()) {
+            wrapperBuilder.addSuperinterface(rootClassName);
+        } else {
+            wrapperBuilder.addSuperinterface(ParameterizedTypeName.get(rootClassName, rootTypeVars.toArray(new TypeName[0])));
+        }
+
+        wrapperBuilder.addField(vType, "value", Modifier.PROTECTED, Modifier.FINAL);
+
+        wrapperBuilder.addMethod(MethodSpec.constructorBuilder()
+                .addModifiers(Modifier.PROTECTED)
+                .addParameter(vType, "value")
+                .addStatement("this.value = $T.requireNonNull(value)", Objects.class)
+                .build());
+
+        // Construct wildcard type for equals cast: Wrapper<?, ?, ...>
+        ClassName wrapperName = rootClassName.nestedClass("Wrapper");
+        TypeName[] wildcards = new TypeName[rootTypeVars.size() + 1];
+        Arrays.fill(wildcards, WildcardTypeName.subtypeOf(Object.class));
+        ParameterizedTypeName wildcardWrapper = ParameterizedTypeName.get(wrapperName, wildcards);
+
+        wrapperBuilder.addMethod(MethodSpec.methodBuilder("equals")
+                .addModifiers(Modifier.PUBLIC)
+                .addAnnotation(Override.class)
+                .returns(boolean.class)
+                .addParameter(Object.class, "o")
+                .addStatement("if (this == o) return true")
+                .addStatement("if (o == null || getClass() != o.getClass()) return false")
+                .addStatement("$T that = ($T) o", wildcardWrapper, wildcardWrapper)
+                .addStatement("return $T.equals(value, that.value)", Objects.class)
+                .build());
+
+        wrapperBuilder.addMethod(MethodSpec.methodBuilder("hashCode")
+                .addModifiers(Modifier.PUBLIC)
+                .addAnnotation(Override.class)
+                .returns(int.class)
+                .addStatement("return $T.hash(value)", Objects.class)
+                .build());
+
+        wrapperBuilder.addMethod(MethodSpec.methodBuilder("toString")
+                .addModifiers(Modifier.PUBLIC)
+                .addAnnotation(Override.class)
+                .returns(String.class)
+                .addStatement("return value.toString()")
+                .build());
+
+        return wrapperBuilder.build();
+    }
+
     private TypeSpec generateWrapperClass(TypeElement permitted, ClassName rootClassName, ClassName visitorClassName, TypeElement blueprint, List<TypeVariableName> rootTypeVars) {
         String wrapperName = permitted.getSimpleName() + "Wrapper";
         
@@ -396,21 +458,19 @@ public class SealedProcessor extends AbstractProcessor {
         // Add Root Type Vars to Wrapper
         wrapperBuilder.addTypeVariables(rootTypeVars);
 
-        // Implement Root Interface
-        if (rootTypeVars.isEmpty()) {
-            wrapperBuilder.addSuperinterface(rootClassName);
-        } else {
-            wrapperBuilder.addSuperinterface(ParameterizedTypeName.get(rootClassName, rootTypeVars.toArray(new TypeName[0])));
-        }
-
-        // Field
-        wrapperBuilder.addField(permittedType, "value", Modifier.PRIVATE, Modifier.FINAL);
+        // Extend Wrapper abstract class
+        ClassName wrapperBase = rootClassName.nestedClass("Wrapper");
+        
+        List<TypeName> wrapperArgs = new ArrayList<>(rootTypeVars);
+        wrapperArgs.add(permittedType);
+        
+        wrapperBuilder.superclass(ParameterizedTypeName.get(wrapperBase, wrapperArgs.toArray(new TypeName[0])));
 
         // Constructor
         wrapperBuilder.addMethod(MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
                 .addParameter(permittedType, "value")
-                .addStatement("this.value = value")
+                .addStatement("super(value)")
                 .build());
 
         // accept implementation
@@ -455,32 +515,6 @@ public class SealedProcessor extends AbstractProcessor {
             }
             wrapperBuilder.addMethod(override.build());
         }
-
-        // 2. equals, hashCode, toString
-        wrapperBuilder.addMethod(MethodSpec.methodBuilder("equals")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .returns(boolean.class)
-                .addParameter(Object.class, "o")
-                .addStatement("if (this == o) return true")
-                .addStatement("if (o == null || getClass() != o.getClass()) return false")
-                .addStatement("$L that = ($L) o", wrapperName, wrapperName)
-                .addStatement("return $T.equals(value, that.value)", Objects.class)
-                .build());
-
-        wrapperBuilder.addMethod(MethodSpec.methodBuilder("hashCode")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .returns(int.class)
-                .addStatement("return $T.hash(value)", Objects.class)
-                .build());
-
-        wrapperBuilder.addMethod(MethodSpec.methodBuilder("toString")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Override.class)
-                .returns(String.class)
-                .addStatement("return $T.toString(value)", Objects.class)
-                .build());
 
         return wrapperBuilder.build();
     }
