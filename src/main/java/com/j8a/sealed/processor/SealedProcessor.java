@@ -628,10 +628,14 @@ public class SealedProcessor extends AbstractProcessor {
                  paramType = TypeName.get(currentClass.asType());
             }
 
+            TypeName funcType = ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class),
+                    WildcardTypeName.supertypeOf(paramType),
+                    WildcardTypeName.subtypeOf(rType));
+
             stageBuilder.addMethod(MethodSpec.methodBuilder("on" + currentClass.getSimpleName())
                     .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                     .returns(nextStageType)
-                    .addParameter(ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), paramType, rType), "func")
+                    .addParameter(funcType, "func")
                     .build());
             
             rootBuilder.addType(stageBuilder.build());
@@ -714,10 +718,13 @@ public class SealedProcessor extends AbstractProcessor {
                  paramType = TypeName.get(currentClass.asType());
             }
 
+            TypeName consType = ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class),
+                    WildcardTypeName.supertypeOf(paramType));
+
             stageBuilder.addMethod(MethodSpec.methodBuilder("on" + currentClass.getSimpleName())
                     .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                     .returns(nextStageType)
-                    .addParameter(ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), paramType), "cons")
+                    .addParameter(consType, "cons")
                     .build());
 
             rootBuilder.addType(stageBuilder.build());
@@ -768,8 +775,10 @@ public class SealedProcessor extends AbstractProcessor {
             }
 
             TypeName type = isFunction 
-                    ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), permittedType, rType)
-                    : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), permittedType);
+                    ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
+                        WildcardTypeName.supertypeOf(permittedType), WildcardTypeName.subtypeOf(rType))
+                    : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), 
+                        WildcardTypeName.supertypeOf(permittedType));
             builder.addField(type, "on" + permitted.getSimpleName(), Modifier.PRIVATE);
         }
 
@@ -827,15 +836,17 @@ public class SealedProcessor extends AbstractProcessor {
             }
 
             TypeName paramType = isFunction
-                    ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), permittedType, rType)
-                    : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), permittedType);
+                    ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
+                        WildcardTypeName.supertypeOf(permittedType), WildcardTypeName.subtypeOf(rType))
+                    : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), 
+                        WildcardTypeName.supertypeOf(permittedType));
 
             MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder("on" + permitted.getSimpleName())
                     .addModifiers(Modifier.PUBLIC)
                     .addAnnotation(Override.class)
                     .returns(returnType)
-                    .addParameter(paramType, "func")
-                    .addStatement("this.on$L = func", permitted.getSimpleName())
+                    .addParameter(paramType, isFunction ? "func" : "cons")
+                    .addStatement("this.on$L = $L", permitted.getSimpleName(), isFunction ? "func" : "cons")
                     .addStatement("return this");
             builder.addMethod(methodBuilder.build());
         }

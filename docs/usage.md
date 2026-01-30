@@ -86,6 +86,16 @@ String description = Shape.returning(String.class)
 System.out.println(description);
 ```
 
+**Note on Flexibility:** Matchers use PECS (Producer-Extends, Consumer-Super). This means you can use general-purpose handlers:
+```java
+Function<Object, String> toStringHandler = Object::toString;
+
+Shape.returning(String.class)
+    .onCircle(toStringHandler)   // Valid: Circle IS-AN Object
+    .onRectangle(toStringHandler)
+    .asFunction();
+```
+
 ### Pattern Matching (Consumer Style)
 
 Use `match()` to perform side-effects.
@@ -120,18 +130,14 @@ The library supports sealed hierarchies with generics, useful for types like `Re
 ```java
 @Sealed(name = "Result")
 @Permits(classes = {Success.class, Failure.class})
-public interface ResultDef<T> {
-    // Optional common methods
-}
+public interface ResultDef<T> {}
 
-// Generic permitted class
 public final class Success<T> {
     private final T value;
     public Success(T value) { this.value = value; }
     public T get() { return value; }
 }
 
-// Non-generic permitted class
 public final class Failure {
     private final String message;
     public Failure(String message) { this.message = message; }
@@ -141,22 +147,57 @@ public final class Failure {
 
 ### Using Generics
 
-The generated `Result<T>` interface will handle type propagation.
+The generated `Result<T>` interface will handle type propagation and supports functional chaining.
 
 ```java
 Result<String> success = Result.wrap(new Success<>("Hello"));
-Result<String> failure = Result.wrap(new Failure("Error"));
 
-// Monadic Map (Auto-generated)
-// Transform Result<String> -> Result<Integer>
-Result<Integer> length = success.map(String::length); 
+// Monadic chaining (Auto-generated)
+Result<Integer> length = success
+    .map(String::trim)
+    .flatMap(s -> s.isEmpty() ? Result.wrap(new Failure("Empty")) : Result.wrap(new Success<>(s.length())));
+```
 
-// Pattern Matching
-Result.returning(String.class)
-    .onFailure(f -> "Failed: " + f.message())
-    .onSuccess(s -> "Succeeded: " + s.get())
-    .asFunction()
-    .apply(success);
+### Linear Pipelines (Railroad Oriented Programming)
+
+With `flatMap`, complex business logic remains linear and purely declarative, automatically short-circuiting on failure states:
+
+```java
+// Assuming these methods exist
+Result<String> callApi();
+Result<User> validate(String rawApiBody);
+Result<Integer> saveToDb(User userToSave); // returns id of created user.
+
+public Result<Integer> process() {
+    return callApi()                  // returns Result<String>
+        .flatMap(this::validate)      // returns Result<User>
+        .flatMap(this::saveToDb);     // returns Result<Integer>
+}
 ```
 
 **Note on `map`:** The `map` method is auto-generated only if the generic permitted class has a compatible constructor (1 arg) and accessor method.
+
+So 
+
+```java
+// Not valid
+final class InvalidConstructor<T> {
+    private final T value();
+    public T getValue(); // we do have an accessor
+    public InvalidConstructor(T oneValue, Integer Another); // But the only constructor takes two parameters
+}
+```
+
+or
+
+```java
+final class Success<T> {
+    private final T value;
+
+    // Valid constructor
+    public Success<T> (T value);
+
+} // class finished with no public access method for value
+```
+
+Will __not__ generate (flat)map

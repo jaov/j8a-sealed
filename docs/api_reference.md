@@ -31,13 +31,29 @@ The annotation processor enforces the following rules at compile time:
 4.  **Uniqueness**: Duplicate classes in `@Permits` are not allowed.
 5.  **Finality**: If `strict=true` (default), all permitted classes must be `final`.
 
-## Map Method Generation
+## Functional Chaining Method Generation
 
-When working with generics, the processor can auto-generate a monadic `map` method (`default <U> Root<U> map(Function<? super T, ? extends U> mapper)`) on the Root interface.
+When working with generics, the processor can auto-generate monadic methods on the Root interface:
+
+*   **`map`**: `default <U> Root<U> map(Function<? super T, ? extends U> mapper)`
+*   **`flatMap`**: `default <U> Root<U> flatMap(Function<? super T, Root<U>> mapper)`
 
 **Requirements for generation:**
 1.  There is exactly one generic permitted class (e.g., `Success<T>`).
 2.  That class has a **public constructor** accepting a single argument of type `T`.
 3.  That class has a **public accessor method** (e.g., `get()`, `value()`) that returns `T`.
 
-If these conditions are not met, the `map` method will be skipped (with a compiler warning).
+If these conditions are not met, these methods will be skipped (with a compiler warning).
+
+## Internal Architecture
+
+### Boilerplate Reduction
+The annotation processor minimizes generated code size by utilizing an internal `abstract static class Wrapper<V>` within the Root interface. This class handles the implementation of:
+*   `equals(Object o)`
+*   `hashCode()`
+*   `toString()`
+
+All generated leaf wrappers extend this base class, ensuring consistent object contracts without repetitive bytecode emission.
+
+### Enhanced Generics (PECS)
+To ensure maximum compatibility with Java 8's limited type inference, the generated Matcher DSL uses **Producer-Extends** and **Consumer-Super** wildcards. This allows users to provide handlers that are more general than the specific permitted classes, facilitating code reuse and integration with existing polymorphic hierarchies.

@@ -7,7 +7,9 @@ This library provides a compile-time simulation of Java 17/21 Sealed Classes and
 *   **Java 8 Compatible**: Brings modern Java features to legacy codebases.
 *   **Non-Invasive**: Your domain model classes (the "leaves") remain pure POJOs. They do not require any annotations.
 *   **Exhaustive by Design**: The generated Pattern Matching DSL enforces handling of all permitted subclasses at compile-time.
-*   **Type-Safe**: Uses Java's type system to ensure correctness.
+*   **Type-Safe**: Leverages Java's type system to ensure correctness across the entire hierarchy.
+*   **Functional Chaining**: Supports monadic `map` and `flatMap` for linear, declarative pipelines (Railroad Oriented Programming).
+*   **Flexible Matchers**: Uses PECS (Producer-Extends, Consumer-Super) to handle inheritance hierarchies and complex type mappings without losing type rigor.
 *   **Double Dispatch**: Implements the Visitor pattern under the hood for efficient dispatch.
 
 ## How It Works
