@@ -76,7 +76,7 @@ public class GenericSupportTest {
             .that(Arrays.asList(resultDef, weirdSuccess))
             .processedWith(new SealedProcessor())
             .compilesWithoutError()
-            .withWarningContaining("Could not generate 'map' method");
+            .withWarningContaining("Could not generate 'map'/'flatMap' methods");
     }
 
     @Test
