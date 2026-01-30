@@ -25,6 +25,7 @@ Define the implementation classes. These are standard Java classes.
 **Requirements:**
 *   They must be **accessible** to the Blueprint (same package if package-private, or public).
 *   By default (`strict=true`), they must be `final`.
+*   They must implement all methods defined in the Blueprint Interface with **public** visibility.
 *   They do not need any specific inheritance or annotations.
 
 ```java

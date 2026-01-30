@@ -174,7 +174,97 @@ public class SealedProcessor extends AbstractProcessor {
                 warning(permitted, "Strict mode is disabled, but it is recommended to make '" + permitted.getSimpleName() + "' final.");
             }
         }
+
+        if (valid) {
+            valid = validateMethodsImplemented(blueprint, permittedClasses);
+        }
+
         return valid;
+    }
+
+    private boolean validateMethodsImplemented(TypeElement blueprint, List<TypeElement> permittedClasses) {
+        boolean valid = true;
+        List<ExecutableElement> blueprintMethods = ElementFilter.methodsIn(elementUtils.getAllMembers(blueprint)).stream()
+                .filter(m -> !m.getModifiers().contains(Modifier.STATIC))
+                .filter(m -> !m.getModifiers().contains(Modifier.DEFAULT))
+                .filter(m -> !m.getEnclosingElement().equals(elementUtils.getTypeElement("java.lang.Object")))
+                .collect(Collectors.toList());
+
+        for (TypeElement permitted : permittedClasses) {
+            List<ExecutableElement> permittedMethods = ElementFilter.methodsIn(elementUtils.getAllMembers(permitted));
+
+            for (ExecutableElement blueprintMethod : blueprintMethods) {
+                ExecutableElement signatureMatch = null;
+                boolean isPublicMatch = false;
+                List<ExecutableElement> nameMatches = new ArrayList<>();
+
+                for (ExecutableElement permittedClassMethod : permittedMethods) {
+                    if (blueprintMethod.getSimpleName().equals(permittedClassMethod.getSimpleName())) {
+                        nameMatches.add(permittedClassMethod);
+                        if (isSignatureMatch(blueprintMethod, permittedClassMethod)) {
+                            signatureMatch = permittedClassMethod;
+                            if (permittedClassMethod.getModifiers().contains(Modifier.PUBLIC)) {
+                                isPublicMatch = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!isPublicMatch) {
+                    if (signatureMatch != null) {
+                        error(permitted, String.format("Permitted class '%s' has a method '%s' matching @Sealed interface '%s', but it must be PUBLIC to be used for delegation. Please change the access modifier.",
+                                permitted.getSimpleName(), formatMethodSignature(blueprintMethod), blueprint.getSimpleName()));
+                    } else if (!nameMatches.isEmpty()) {
+                        StringBuilder nearMatches = new StringBuilder();
+                        for (int i = 0; i < nameMatches.size(); i++) {
+                            if (i > 0) nearMatches.append(", ");
+                            nearMatches.append("'").append(formatMethodSignature(nameMatches.get(i))).append("'");
+                        }
+                        error(permitted, String.format("Permitted class '%s' has methods with the same name as '%s' in @Sealed interface '%s', but the signatures do not match. Found near matches: %s. Please implement with the exact signature.",
+                                permitted.getSimpleName(), formatMethodSignature(blueprintMethod), blueprint.getSimpleName(), nearMatches.toString()));
+                    } else {
+                        error(permitted, String.format("Permitted class '%s' is missing method '%s' defined in @Sealed interface '%s'. Please implement it with a matching signature.",
+                                permitted.getSimpleName(), formatMethodSignature(blueprintMethod), blueprint.getSimpleName()));
+                    }
+                    valid = false;
+                } else {
+                    // It is a public signature match. Now verify return type.
+                    if (!typeUtils.isAssignable(typeUtils.erasure(signatureMatch.getReturnType()), typeUtils.erasure(blueprintMethod.getReturnType()))) {
+                        error(permitted, String.format("Permitted class '%s' implements '%s', but its return type is incompatible with @Sealed interface '%s'.",
+                                permitted.getSimpleName(), formatMethodSignature(blueprintMethod), blueprint.getSimpleName()));
+                        valid = false;
+                    }
+                }
+            }
+        }
+        return valid;
+    }
+
+    private boolean isSignatureMatch(ExecutableElement blueprintMethod, ExecutableElement permittedClassMethod) {
+        if (!blueprintMethod.getSimpleName().equals(permittedClassMethod.getSimpleName())) return false;
+        if (blueprintMethod.getParameters().size() != permittedClassMethod.getParameters().size()) return false;
+
+        for (int i = 0; i < blueprintMethod.getParameters().size(); i++) {
+            TypeMirror bpType = blueprintMethod.getParameters().get(i).asType();
+            TypeMirror pType = permittedClassMethod.getParameters().get(i).asType();
+
+            if (!typeUtils.isSameType(typeUtils.erasure(bpType), typeUtils.erasure(pType))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String formatMethodSignature(ExecutableElement method) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(method.getSimpleName()).append("(");
+        for (int i = 0; i < method.getParameters().size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(typeUtils.erasure(method.getParameters().get(i).asType()).toString());
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
     private void generateRootInterface(TypeElement blueprint, String rootName, List<TypeElement> permittedClasses, GenerationMode mode) throws IOException {

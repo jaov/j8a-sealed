@@ -30,6 +30,16 @@ The annotation processor enforces the following rules at compile time:
 3.  **No Abstracts**: Permitted classes cannot be abstract.
 4.  **Uniqueness**: Duplicate classes in `@Permits` are not allowed.
 5.  **Finality**: If `strict=true` (default), all permitted classes must be `final`.
+6.  **Method Delegation**: Every non-static, non-default method in the Blueprint Interface must have a corresponding **public** implementation in every permitted class.
+
+## Method Delegation Validation
+
+To ensure the rigor of the sealed hierarchy, the processor proactively validates that every permitted class satisfies the contract defined in the Blueprint Interface. If a requirement is not met, the processor provides "gentle guidance" via descriptive error messages:
+
+*   **Missing Method**: If a method is completely missing, you are instructed to implement it.
+*   **Access Modifier**: If a matching signature exists but is not `public`, the processor identifies the method and asks you to change its accessibility.
+*   **Signature Mismatch (Near-Match)**: If methods with the same name exist but have different parameters, the processor lists the "near-matches" it found to help you identify the discrepancy.
+*   **Return Type**: If the method exists but returns an incompatible type, a specific error is triggered.
 
 ## Functional Chaining Method Generation
 
