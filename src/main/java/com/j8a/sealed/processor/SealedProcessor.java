@@ -271,8 +271,6 @@ public class SealedProcessor extends AbstractProcessor {
         for (ExecutableElement method : ElementFilter.methodsIn(genericPermitted.getEnclosedElements())) {
             if (method.getModifiers().contains(Modifier.PUBLIC) && !method.getModifiers().contains(Modifier.STATIC)) {
                  TypeMirror returnType = method.getReturnType();
-                 // Simple check: does return type name match the type parameter name?
-                 // A better check involves checking if returnType is a TypeVariable and its element matches the class's type param
                  if (returnType.getKind() == javax.lang.model.type.TypeKind.TYPEVAR) {
                      if (returnType.toString().equals(genericPermitted.getTypeParameters().get(0).getSimpleName().toString())) {
                          accessorName = method.getSimpleName().toString();
@@ -296,11 +294,14 @@ public class SealedProcessor extends AbstractProcessor {
         }
 
         if (accessorName == null || !hasConstructor) {
-             warning(genericPermitted, "Could not generate 'map' method. Requires a public accessor returning the type parameter and a public constructor accepting it.");
+             warning(genericPermitted, "Could not generate 'map'/'flatMap' methods. Requires a public accessor returning the type parameter and a public constructor accepting it.");
              return;
         }
 
-        // Generate map
+        // 1. Generate flatMap
+        generateFlatMapMethod(rootBuilder, rootClassName, permittedClasses, rootTypeVars, genericPermitted, accessorName);
+
+        // 2. Generate map using flatMap
         TypeVariableName tType = rootTypeVars.get(0);
         TypeVariableName uType = TypeVariableName.get("U");
         
@@ -309,15 +310,33 @@ public class SealedProcessor extends AbstractProcessor {
                 WildcardTypeName.supertypeOf(tType), 
                 WildcardTypeName.subtypeOf(uType));
 
-        MethodSpec.Builder mapBuilder = MethodSpec.methodBuilder("map")
+        MethodSpec mapMethod = MethodSpec.methodBuilder("map")
+                .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
+                .addTypeVariable(uType)
+                .returns(returnType)
+                .addParameter(mapperType, "mapper")
+                .addStatement("return this.flatMap(val -> $T.wrap(new $T<>(mapper.apply(val))))", 
+                        rootClassName, ClassName.get(genericPermitted))
+                .build();
+        
+        rootBuilder.addMethod(mapMethod);
+    }
+
+    private void generateFlatMapMethod(TypeSpec.Builder rootBuilder, ClassName rootClassName, List<TypeElement> permittedClasses, List<TypeVariableName> rootTypeVars, TypeElement genericPermitted, String accessorName) {
+        TypeVariableName tType = rootTypeVars.get(0);
+        TypeVariableName uType = TypeVariableName.get("U");
+        
+        ParameterizedTypeName returnType = ParameterizedTypeName.get(rootClassName, uType);
+        ParameterizedTypeName mapperType = ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
+                WildcardTypeName.supertypeOf(tType), 
+                returnType);
+
+        MethodSpec.Builder flatMapBuilder = MethodSpec.methodBuilder("flatMap")
                 .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
                 .addTypeVariable(uType)
                 .returns(returnType)
                 .addParameter(mapperType, "mapper");
 
-        // Visitor<T, Result<U>>
-        // However, Visitor is generated as Visitor<T, R>
-        // So we need Visitor<T, Result<U>>
         ClassName visitorClassName = rootClassName.nestedClass("Visitor");
         ParameterizedTypeName visitorType = ParameterizedTypeName.get(visitorClassName, tType, returnType);
 
@@ -340,19 +359,16 @@ public class SealedProcessor extends AbstractProcessor {
             onMethod.addParameter(permittedTypeInput, "val");
 
             if (permitted.equals(genericPermitted)) {
-                // return wrap(new Success<>(mapper.apply(val.get())));
-                onMethod.addStatement("return $T.wrap(new $T<>(mapper.apply(val.$L())))", 
-                        rootClassName, ClassName.get(permitted), accessorName);
+                onMethod.addStatement("return mapper.apply(val.$L())", accessorName);
             } else {
-                // return wrap(val);
                 onMethod.addStatement("return $T.<$T>wrap(val)", rootClassName, uType);
             }
             
             visitorImpl.addMethod(onMethod.build());
         }
 
-        mapBuilder.addStatement("return this.accept($L)", visitorImpl.build());
-        rootBuilder.addMethod(mapBuilder.build());
+        flatMapBuilder.addStatement("return this.accept($L)", visitorImpl.build());
+        rootBuilder.addMethod(flatMapBuilder.build());
     }
 
     private TypeSpec generateVisitorInterface(ClassName visitorClassName, List<TypeElement> permittedClasses, List<TypeVariableName> rootTypeVars) {
