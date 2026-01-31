@@ -1021,16 +1021,16 @@ public class SealedProcessor extends AbstractProcessor {
                     .addCode("    public void accept($T root) {\n", rootType)
                     .addCode("        root.accept(new Visitor");
 
-            // Generate Visitor type args <T, Object>
+            // Generate Visitor type args <T, Void>
              if (!rootTypeVars.isEmpty()) {
                 asCons.addCode("<");
                 for (int i = 0; i < rootTypeVars.size(); i++) {
                     if (i > 0) asCons.addCode(", ");
                     asCons.addCode("$T", rootTypeVars.get(i));
                 }
-                asCons.addCode(", $T>", Object.class);
+                asCons.addCode(", $T>", Void.class);
             } else {
-                asCons.addCode("<$T>", Object.class);
+                asCons.addCode("<$T>", Void.class);
             }
 
             asCons.addCode("() {\n");
@@ -1045,7 +1045,7 @@ public class SealedProcessor extends AbstractProcessor {
 
                  asCons.addCode("            @Override\n")
                        .addCode("            public $T on$L($T val) { on$L.accept(val); return null; }\n", 
-                               Object.class, permitted.getSimpleName(), permittedType, permitted.getSimpleName());
+                               Void.class, permitted.getSimpleName(), permittedType, permitted.getSimpleName());
             }
             
             asCons.addCode("        });\n")
