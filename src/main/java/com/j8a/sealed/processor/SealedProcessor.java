@@ -719,7 +719,7 @@ public class SealedProcessor extends AbstractProcessor {
             }
 
             TypeName funcType = ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class),
-                    WildcardTypeName.supertypeOf(paramType),
+                    paramType,
                     WildcardTypeName.subtypeOf(rType));
 
             stageBuilder.addMethod(MethodSpec.methodBuilder("on" + currentClass.getSimpleName())
@@ -809,7 +809,7 @@ public class SealedProcessor extends AbstractProcessor {
             }
 
             TypeName consType = ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class),
-                    WildcardTypeName.supertypeOf(paramType));
+                    paramType);
 
             stageBuilder.addMethod(MethodSpec.methodBuilder("on" + currentClass.getSimpleName())
                     .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
@@ -866,9 +866,9 @@ public class SealedProcessor extends AbstractProcessor {
 
             TypeName type = isFunction 
                     ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
-                        WildcardTypeName.supertypeOf(permittedType), WildcardTypeName.subtypeOf(rType))
+                        permittedType, WildcardTypeName.subtypeOf(rType))
                     : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), 
-                        WildcardTypeName.supertypeOf(permittedType));
+                        permittedType);
             builder.addField(type, "on" + permitted.getSimpleName(), Modifier.PRIVATE);
         }
 
@@ -927,9 +927,9 @@ public class SealedProcessor extends AbstractProcessor {
 
             TypeName paramType = isFunction
                     ? ParameterizedTypeName.get(ClassName.get(java.util.function.Function.class), 
-                        WildcardTypeName.supertypeOf(permittedType), WildcardTypeName.subtypeOf(rType))
+                        permittedType, WildcardTypeName.subtypeOf(rType))
                     : ParameterizedTypeName.get(ClassName.get(java.util.function.Consumer.class), 
-                        WildcardTypeName.supertypeOf(permittedType));
+                        permittedType);
 
             MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder("on" + permitted.getSimpleName())
                     .addModifiers(Modifier.PUBLIC)

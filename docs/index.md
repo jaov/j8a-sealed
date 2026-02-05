@@ -10,7 +10,7 @@ This library provides a compile-time simulation of Java 17/21 Sealed Classes and
 *   **Type-Safe**: Leverages Java's type system to ensure correctness across the entire hierarchy.
 *   **Proactive Validation**: The processor verifies that all permitted classes correctly implement the blueprint's contract, providing detailed "near-match" hints for troubleshooting.
 *   **Functional Chaining**: Supports monadic `map` and `flatMap` for linear, declarative pipelines (Railroad Oriented Programming).
-*   **Flexible Matchers**: Uses PECS (Producer-Extends, Consumer-Super) to handle inheritance hierarchies and complex type mappings without losing type rigor.
+*   **IDE-Friendly Matchers**: Uses strict typing for handler parameters to ensure perfect auto-completion and type inference in your favorite IDE.
 *   **Double Dispatch**: Implements the Visitor pattern under the hood for efficient dispatch.
 
 ## How It Works

@@ -40,9 +40,9 @@ public class EnhancedGenericsTest {
         JavaFileObject resultFile = compilation.generatedSourceFile("com.example.Pet").get();
         String content = resultFile.getCharContent(true).toString();
         
-        assertTrue("Should use ? super for Function input", content.contains("onDog(Function<? super Dog, "));
+        assertTrue("Should use exact type for Function input", content.contains("onDog(Function<Dog, "));
         assertTrue("Should use ? extends for Function output", content.contains(", ? extends R> func)"));
-        assertTrue("Should use ? super for Consumer input", content.contains("onDog(Consumer<? super Dog> cons)"));
+        assertTrue("Should use exact type for Consumer input", content.contains("onDog(Consumer<Dog> cons)"));
     }
 
     @Test
@@ -68,8 +68,8 @@ public class EnhancedGenericsTest {
             "import java.util.function.Function;\n" +
             "public class Usage {\n" +
             "    public void test() {\n" +
-            "        Function<Object, String> func = o -> o.toString();\n" +
-            "        // This should compile because of ? super Dog\n" +
+            "        Function<Dog, String> func = o -> o.toString();\n" +
+            "        // This should compile with exact match\n" +
             "        Pet.returning(String.class).onDog(func).asFunction();\n" +
             "    }\n" +
             "}"

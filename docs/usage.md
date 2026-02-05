@@ -79,7 +79,7 @@ Use `returning(Class<R>)` to map the shape to a value. The compiler enforces tha
 
 ```java
 String description = Shape.returning(String.class)
-    .onCircle(circle -> "A circle with area: " + circle.area())
+    .onCircle(circle -> "A circle with area: " + circle.area()) // Auto-completes 'area()' perfectly!
     .onRectangle(rect -> "A rectangle with area: " + rect.area())
     .asFunction()
     .apply(shape);
@@ -87,15 +87,7 @@ String description = Shape.returning(String.class)
 System.out.println(description);
 ```
 
-**Note on Flexibility:** Matchers use PECS (Producer-Extends, Consumer-Super). This means you can use general-purpose handlers:
-```java
-Function<Object, String> toStringHandler = Object::toString;
-
-Shape.returning(String.class)
-    .onCircle(toStringHandler)   // Valid: Circle IS-AN Object
-    .onRectangle(toStringHandler)
-    .asFunction();
-```
+**Note on IDE Support:** Matchers use strict typing for lambda parameters. This ensures that your IDE correctly identifies the specific type (like `Circle` or `Rectangle`) and provides accurate auto-completion for all methods and fields.
 
 ### Pattern Matching (Consumer Style)
 

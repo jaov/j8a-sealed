@@ -65,5 +65,10 @@ The annotation processor minimizes generated code size by utilizing an internal 
 
 All generated leaf wrappers extend this base class, ensuring consistent object contracts without repetitive bytecode emission.
 
-### Enhanced Generics (PECS)
-To ensure maximum compatibility with Java 8's limited type inference, the generated Matcher DSL uses **Producer-Extends** and **Consumer-Super** wildcards. This allows users to provide handlers that are more general than the specific permitted classes, facilitating code reuse and integration with existing polymorphic hierarchies.
+### IDE-Friendly Matchers
+To ensure perfect auto-completion and type inference in IDEs, the generated Matcher DSL uses **strict typing** for input parameters while maintaining **Producer-Extends** covariance for outputs.
+
+*   **Strict Input**: Handler parameters use exact types (e.g., `Function<Dog, ...>`). This avoids common pitfalls where IDEs fail to infer specific methods (like `dog.bark()`) when using `? super` wildcards.
+*   **Covariant Output**: Handler return types use `? extends R`. This allows you to return a `String` where a `CharSequence` is expected, maintaining type safety and flexibility.
+
+This design choice prioritizes the developer experience and IDE support, ensuring that pattern matching feels fluent and intuitive.
