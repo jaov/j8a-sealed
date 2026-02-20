@@ -338,6 +338,10 @@ public class SealedProcessor extends AbstractProcessor {
             generateConsumerDSL(rootBuilder, rootClassName, permittedClasses, typeVariables);
         }
 
+        if (!typeVariables.isEmpty()) {
+            generateClassOfValue(rootBuilder, rootClassName, typeVariables, mode);
+        }
+
         JavaFile.builder(packageName, rootBuilder.build())
                 .skipJavaLangImports(true)
                 .build()
@@ -687,7 +691,9 @@ public class SealedProcessor extends AbstractProcessor {
             returningBuilder.addStatement("return new MatcherBuilder<>()");
         }
 
-        rootBuilder.addMethod(returningBuilder.build());
+        if (rootTypeVars.isEmpty()) {
+            rootBuilder.addMethod(returningBuilder.build());
+        }
 
         // Generate Interfaces
         for (int i = 0; i < permittedClasses.size(); i++) {
@@ -780,7 +786,9 @@ public class SealedProcessor extends AbstractProcessor {
             matchBuilder.addStatement("return new ConsumerMatcherBuilder<>()");
         }
 
-        rootBuilder.addMethod(matchBuilder.build());
+        if (rootTypeVars.isEmpty()) {
+            rootBuilder.addMethod(matchBuilder.build());
+        }
 
         // Generate Interfaces for each stage
         for (int i = 0; i < permittedClasses.size(); i++) {
@@ -1055,6 +1063,53 @@ public class SealedProcessor extends AbstractProcessor {
         }
 
         rootBuilder.addType(builder.build());
+    }
+
+    private void generateClassOfValue(TypeSpec.Builder rootBuilder, ClassName rootClassName, List<TypeVariableName> rootTypeVars, GenerationMode mode) {
+        TypeSpec.Builder covBuilder = TypeSpec.classBuilder("ClassOfValue")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .addTypeVariables(rootTypeVars);
+
+        if (mode == GenerationMode.FUNCTION || mode == GenerationMode.BOTH) {
+            TypeVariableName rType = TypeVariableName.get("R");
+            ClassName firstStage = rootClassName.nestedClass("MatcherStage0");
+            List<TypeName> stageArgs = new ArrayList<>(rootTypeVars);
+            stageArgs.add(rType);
+            TypeName stageType = ParameterizedTypeName.get(firstStage, stageArgs.toArray(new TypeName[0]));
+
+            covBuilder.addMethod(MethodSpec.methodBuilder("returning")
+                    .addModifiers(Modifier.PUBLIC)
+                    .addTypeVariable(rType)
+                    .returns(stageType)
+                    .addParameter(ParameterizedTypeName.get(ClassName.get(Class.class), rType), "resultType")
+                    .addStatement("return new MatcherBuilder<>()")
+                    .build());
+        }
+
+        if (mode == GenerationMode.CONSUMER || mode == GenerationMode.BOTH) {
+            ClassName firstStage = rootClassName.nestedClass("ConsumerMatcherStage0");
+            TypeName stageType = ParameterizedTypeName.get(firstStage, rootTypeVars.toArray(new TypeName[0]));
+
+            covBuilder.addMethod(MethodSpec.methodBuilder("match")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(stageType)
+                    .addStatement("return new ConsumerMatcherBuilder<>()")
+                    .build());
+        }
+
+        rootBuilder.addType(covBuilder.build());
+
+        MethodSpec.Builder covMethod = MethodSpec.methodBuilder("classOfValue")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .addTypeVariables(rootTypeVars)
+                .returns(ParameterizedTypeName.get(rootClassName.nestedClass("ClassOfValue"), rootTypeVars.toArray(new TypeName[0])));
+
+        for (TypeVariableName tVar : rootTypeVars) {
+            covMethod.addParameter(ParameterizedTypeName.get(ClassName.get(Class.class), tVar), "clazz" + tVar.name);
+        }
+
+        covMethod.addStatement("return new ClassOfValue<>()");
+        rootBuilder.addMethod(covMethod.build());
     }
     
     private void error(Element e, String msg) {

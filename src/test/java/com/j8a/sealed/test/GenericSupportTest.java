@@ -177,4 +177,84 @@ public class GenericSupportTest {
             .failsToCompile()
             .withErrorContaining("base interface MUST NOT be generic");
     }
+
+    @Test
+    public void testGenericInferenceWithClassOfValue() {
+        JavaFileObject resultDef = JavaFileObjects.forSourceString("com.example.ResultDef",
+            "package com.example;\n" +
+            "import com.j8a.sealed.annotations.Sealed;\n" +
+            "import com.j8a.sealed.annotations.Permits;\n" +
+            "\n" +
+            "@Sealed(name=\"Result\")\n" +
+            "@Permits(classes={Success.class, Failure.class})\n" +
+            "public interface ResultDef<T> {}"
+        );
+
+        JavaFileObject success = JavaFileObjects.forSourceString("com.example.Success",
+            "package com.example;\n" +
+            "public final class Success<T> {\n" +
+            "    private final T value;\n" +
+            "    public Success(T value) { this.value = value; }\n" +
+            "    public T get() { return value; }\n" +
+            "}"
+        );
+
+        JavaFileObject failure = JavaFileObjects.forSourceString("com.example.Failure",
+            "package com.example;\n" +
+            "public final class Failure {\n" +
+            "    private final String message;\n" +
+            "    public Failure(String message) { this.message = message; }\n" +
+            "    public String message() { return message; }\n" +
+            "}"
+        );
+
+        JavaFileObject usage = JavaFileObjects.forSourceString("com.example.Usage",
+            "package com.example;\n" +
+            "import java.util.function.Function;\n" +
+            "public class Usage {\n" +
+            "    public void use(Result<String> res) {\n" +
+            "        // Failure comes before Success alphabetically in generated DSL stages\n" +
+            "        Integer val = Result.classOfValue(String.class).returning(Integer.class)\n" +
+            "            .onFailure(f -> 0)\n" +
+            "            .onSuccess(s -> s.get().length())\n" +
+            "            .asFunction()\n" +
+            "            .apply(res);\n" +
+            "    }\n" +
+            "}"
+        );
+
+        assertAbout(javaSources())
+            .that(Arrays.asList(resultDef, success, failure, usage))
+            .processedWith(new SealedProcessor())
+            .compilesWithoutError();
+    }
+
+    @Test
+    public void testStaticMethodsNotGeneratedForGenerics() {
+        JavaFileObject resultDef = JavaFileObjects.forSourceString("com.example.ResultDef",
+            "package com.example;\n" +
+            "import com.j8a.sealed.annotations.Sealed;\n" +
+            "import com.j8a.sealed.annotations.Permits;\n" +
+            "@Sealed(name=\"Result\") @Permits(classes={Success.class})\n" +
+            "public interface ResultDef<T> {}"
+        );
+        JavaFileObject success = JavaFileObjects.forSourceString("com.example.Success",
+            "package com.example; public final class Success<T> {}"
+        );
+        JavaFileObject usage = JavaFileObjects.forSourceString("com.example.Usage",
+            "package com.example;\n" +
+            "public class Usage {\n" +
+            "    public void use() {\n" +
+            "        // This should FAIL to compile because returning() is NOT static on Result when Result is generic\n" +
+            "        Result.returning(Object.class);\n" +
+            "    }\n" +
+            "}"
+        );
+
+        assertAbout(javaSources())
+            .that(Arrays.asList(resultDef, success, usage))
+            .processedWith(new SealedProcessor())
+            .failsToCompile()
+            .withErrorContaining("cannot find symbol");
+    }
 }

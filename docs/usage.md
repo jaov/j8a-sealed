@@ -168,6 +168,21 @@ public Result<Integer> process() {
 }
 ```
 
+### Pattern Matching with Generics
+
+When your hierarchy is generic (like `Result<T>`), Java 8 often struggles with type inference for static methods. To ensure perfect type safety and IDE support, use `classOfValue(Class<T>)` as the entry point:
+
+```java
+Integer result = Result.classOfValue(String.class)
+    .returning(Integer.class)
+    .onSuccess(success -> success.get().length())
+    .onFailure(failure -> 0)
+    .asFunction()
+    .apply(myResult);
+```
+
+**Note:** For generic root interfaces, the standard static `returning()` and `match()` methods are disabled to prevent ambiguous inference. `classOfValue()` becomes the mandatory entry point.
+
 **Note on `map`:** The `map` method is auto-generated only if the generic permitted class has a compatible constructor (1 arg) and accessor method.
 
 So 

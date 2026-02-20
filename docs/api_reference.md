@@ -55,6 +55,19 @@ When working with generics, the processor can auto-generate monadic methods on t
 
 If these conditions are not met, these methods will be skipped (with a compiler warning).
 
+## Generic Entry Points (Java 8 Inference)
+
+When the Root Interface is generic, the standard static `returning()` and `match()` methods are **not generated** to prevent ambiguous type inference in Java 8. Instead, the `classOfValue()` entry point must be used:
+
+### `classOfValue(Class<T> type)`
+
+Available only on generic Root Interfaces.
+
+*   **`returning(Class<R> resultType)`**: Starts a functional pattern match.
+*   **`match()`**: Starts a consumer (side-effect) pattern match.
+
+This pattern provides explicit type witnesses for the compiler, ensuring perfect auto-completion and type inference even in legacy Java 8 environments.
+
 ## Internal Architecture
 
 ### Boilerplate Reduction
