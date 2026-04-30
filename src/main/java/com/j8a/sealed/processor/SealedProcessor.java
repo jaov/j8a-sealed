@@ -685,11 +685,7 @@ public class SealedProcessor extends AbstractProcessor {
                 .returns(returnType)
                 .addParameter(ParameterizedTypeName.get(ClassName.get(Class.class), rType), "resultType");
 
-        if (rootTypeVars.isEmpty()) {
-            returningBuilder.addStatement("return new MatcherBuilder()");
-        } else {
-            returningBuilder.addStatement("return new MatcherBuilder<>()");
-        }
+        returningBuilder.addStatement("return new MatcherBuilder<>()");
 
         if (rootTypeVars.isEmpty()) {
             rootBuilder.addMethod(returningBuilder.build());
