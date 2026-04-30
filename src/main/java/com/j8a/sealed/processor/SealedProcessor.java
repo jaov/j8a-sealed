@@ -66,6 +66,13 @@ public class SealedProcessor extends AbstractProcessor {
                 e.printStackTrace();
             }
         }
+
+        for (Element element : roundEnv.getElementsAnnotatedWith(Permits.class)) {
+            if (element.getAnnotation(Sealed.class) == null) {
+                error(element, "A @Permits annotation can only be used on an interface also annotated with @Sealed.");
+            }
+        }
+
         return true;
     }
 
@@ -83,6 +90,17 @@ public class SealedProcessor extends AbstractProcessor {
         boolean strict = permitsAnnotation.strict();
 
         List<TypeMirror> permittedTypes = getPermittedTypes(permitsAnnotation);
+        
+        // Duplicate detection (Full qualified names)
+        Set<String> qualifiedNames = new HashSet<>();
+        for (TypeMirror tm : permittedTypes) {
+            String fqn = tm.toString();
+            if (!qualifiedNames.add(fqn)) {
+                error(blueprintInterface, "Duplicate class detected in @Permits: " + fqn.substring(fqn.lastIndexOf('.') + 1));
+                return;
+            }
+        }
+
         List<TypeElement> permittedClasses = new ArrayList<>();
 
         for (TypeMirror typeMirror : permittedTypes) {
