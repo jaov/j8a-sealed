@@ -4,7 +4,7 @@
   <groupId>com.j8a</groupId>
   <artifactId>j8a-sealed</artifactId>
   <packaging>jar</packaging>
-  <version>1.0-SNAPSHOT</version>
+  <version>0.8.0</version>
   <name>j8a-sealed</name>
   <url>http://maven.apache.org</url>
   <properties>
