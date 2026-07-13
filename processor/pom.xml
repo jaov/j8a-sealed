@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.j8a</groupId>
     <artifactId>j8a-sealed-parent</artifactId>
-    <version>0.8.0</version>
+    <version>${revision}</version>
   </parent>
   <artifactId>j8a-sealed-processor</artifactId>
   <packaging>jar</packaging>

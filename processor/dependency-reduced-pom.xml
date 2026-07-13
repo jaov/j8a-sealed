@@ -6,8 +6,10 @@
     <version>0.8.0</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
+  <groupId>com.j8a</groupId>
   <artifactId>j8a-sealed-processor</artifactId>
   <name>j8a-sealed-processor</name>
+  <version>0.8.0</version>
   <description>Annotation processor for j8a-sealed</description>
   <build>
     <plugins>
